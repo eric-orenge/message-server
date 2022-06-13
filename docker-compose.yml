@@ -1,0 +1,22 @@
+version: '3.3'
+
+services:
+  redis:
+    image: redis:6.2-alpine
+    ports:
+      - 6379:6379
+    command: redis-server --save 60 1 --requirepass MDNcVb924a --loglevel warning
+  message-server:
+    build: .
+    working_dir: /go/src
+    ports:
+     - "5000:5000"
+    volumes:
+     - .:/go/src
+    links:
+     - redis
+    environment:
+      - REDIS_URL=redis:6379
+      - REDIS_PASSWORD=MDNcVb924a
+      - REDIS_DB=0
+      - PORT=5000
