@@ -2,10 +2,14 @@ package websocket
 
 import (
 	"context"
+	"encoding/json"
 	"log"
+	"os"
+	"strconv"
 	"time"
 
 	"github.com/eric-orenge/message-server/models"
+	"github.com/eric-orenge/message-server/redis"
 	"github.com/eric-orenge/message-server/utils"
 )
 
@@ -15,6 +19,7 @@ type Pool struct {
 	Clients    map[*Client]bool
 	PendingAck map[string]models.Message
 	Broadcast  chan models.Message
+	RedisCtrl  *redis.RedisCtrl
 }
 
 func NewPool() *Pool {
@@ -37,18 +42,41 @@ func (pool *Pool) handleAckReceipts(msgID string) {
 		log.Println("Periodic sync done: ", msgID)
 		// message has not been received after 30 seconds
 		// cache message in redis
-		if _, ok := pool.PendingAck[msgID]; ok {
+		if msg, ok := pool.PendingAck[msgID]; ok {
+			//add to redis cache
+			msgObject, _ := json.Marshal(msg)
+			err := pool.RedisCtrl.SetMessage(msgID, msgObject)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			// add to client queue
+			clientID := msg.Body.Data.(map[string]interface{})["to"].(string)
+			err = pool.RedisCtrl.PushMessage(clientID, msgID)
+			if err != nil {
+				log.Println(err)
+				return
+			}
 			log.Println("Message ", msgID, " ack still pending")
-			//cache
 
 		} else {
 			//ack has been removed
 			log.Println("Message ", msgID, " ack cleared")
-			ctx.Done()
 		}
 	}
 }
 func (pool *Pool) Start() {
+	// connect to redis
+	pool.RedisCtrl.Address = os.Getenv("REDIS_URL")
+	pool.RedisCtrl.Password = os.Getenv("REDIS_PASSWORD")
+	db, _ := strconv.ParseInt(os.Getenv("REDIS_DB"), 10, 64)
+	pool.RedisCtrl.DB = db
+
+	err := pool.RedisCtrl.Connect()
+	if err != nil {
+		panic(err)
+	}
+
 	for {
 		select {
 		case client := <-pool.Register:
@@ -72,8 +100,10 @@ func (pool *Pool) Start() {
 				// remove from pending acks since it has been received
 				if msg, ok := pool.PendingAck[msgID]; ok {
 					delete(pool.PendingAck, msg.ID)
+					// send ack to client who sent the message
 				}
 			} else if message.Body.Command == "newID" {
+				log.Println("Client requesting for new ID")
 				for client := range pool.Clients {
 					if client.ID == message.ClientID {
 						message.Body.Data = client.ID
@@ -82,6 +112,14 @@ func (pool *Pool) Start() {
 							log.Println(err)
 							return
 						}
+					}
+				}
+			} else if message.Body.Command == "setID" {
+				log.Println("Set client ID")
+				for client := range pool.Clients {
+					if client.ID == message.ClientID {
+						//client ID set
+						client.ID = message.Body.Data.(string)
 					}
 				}
 			} else { // do not broadcast ack receipts

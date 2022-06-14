@@ -1,4 +1,4 @@
-package controller
+package redis
 
 import (
 	"encoding/json"
@@ -52,7 +52,6 @@ func (rCtrl *RedisCtrl) SetMessage(key string, message []byte) error { // key - 
 }
 
 func (rCtrl *RedisCtrl) GetMessage(key string) models.Message { // key - iphone@+254705207666 -
-
 	val, err := rCtrl.Client.Get(key).Bytes()
 	if err != nil {
 		log.Println(err)
