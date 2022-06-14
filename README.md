@@ -7,8 +7,9 @@ Once client A sends a message to client B the message server waits for ACK respo
 I'll use the messages logged by the message server to explain what happens under the hood:
 
 ⇨ http server started on [::]:5000
+
 message-server_1  | 2022/06/10 07:25:47 Size of Connection Pool:  1
-message-server_1  | 2022/06/10 07:25:47 &{48b80696fa492daccab727f1d02ed877 0xc0001982c0 0xc0001840c0}
+
 message-server_1  | 2022/06/10 07:25:51 Size of Connection Pool:  2
 
 Two clients have been connected, you can tell that from the size of the connection pool. Once a client disconnects its removed from the connection pool.
@@ -22,7 +23,17 @@ Send message request
 message-server_1  | Message Received: {ID: Type:1 Body:{Command:sendMessage Data:map[from: text:Test to:Test]}}
 
 On receiving a message, the message server broadcasts the message to all connected clients.
+
 message-server_1  | 2022/06/10 07:25:57 Sending message to all clients in Pool
 
 Ack response received for the message sent
+
 message-server_1  | Message Received: {ID: Type:1 Body:{Command:ack Data:fa62fcdeaa8359aa0f0b503976efcdd1}}
+
+To run the message server
+
+```
+cd message-server
+docker-compose up --build
+```
+
